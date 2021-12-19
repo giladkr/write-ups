@@ -3,13 +3,13 @@ from pathlib import Path
 def get_frame(data: bytes):
     if data.startswith(b'\x00\x00'):
         size = int.from_bytes(data[:4], 'big') + 4
-        return size, data[4:size]
+        return size, data[4:size-10]
     else:
         size = data.find(b'\x00\x00')
         # making sure its not a random \x00\x00
         while size + 4 + int.from_bytes(data[size:size+4], 'big') != data.find(b'\x00\x00', size+4):
             size = data.find(b'\x00\x00', size+4)
-        return size, data[:size]
+        return size, data[:size-10]
 
 def extract_frames(backup_data: bytes):
     frames = []

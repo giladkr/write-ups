@@ -1,4 +1,4 @@
-# caBalS puking (hxp CTF 2020)
+# caBalS puking (hxp CTF 2021)
 
 Challenge description:
 
@@ -24,8 +24,8 @@ I started by searching for tools that can parse and decrypt the backup files:
 * https://github.com/bepaald/signalbackup-tools (cpp)
 * https://github.com/SoftwareArtisan/signal-backup-exporter (python :))
 
-Both seems to request 30 digits passphrase to decrypt the db.
-The tools seems to read iv and salt from the backup header. I used `signalbackup-tools` on both files to check their properties:
+Both seem to request 30 digit passphrase to decrypt the db.
+The tools seem to read iv and salt from the backup header. I used `signalbackup-tools` on both files to check their properties:
 
 ```bash
 $ ./signalbackup-tools signal-2021-11-29-22-02-26.backup 000000000000000000000000000000
@@ -59,8 +59,12 @@ WARNING: Bad MAC in frame: theirMac: (hex:) ff ec 53 c8 58 a9 f6 64 1a 7a
 
 The backup, cipher and mac keys are derived from the passphrase and the salt.
 
-The data is splitted into separated frames.
-The encryption seems to be some variation of AES CTR on each frame of the data.
+The data is split into separated frames.
+The encryption seems to be some variation of 
+
+[AES-CTR]: https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Counter_(CTR)
+
+ on each frame of the data.
 Pseudo code:
 
 ```
@@ -76,12 +80,12 @@ for frame in data:
 The counter (4 most significant bytes of the iv) is incremented between each frame,
 And the whole iv is incremented between blocks.
 
-As we've seen both of the backups shares the same iv and salt (and probably the same passphrase),
-so by xoring each of their frames respectively we can get rid of the encrypted aes stream and have the xored plaintexts.
-Also, If we will have the plaintext of one of them we can xor it with the encrypted data and retrieve the aes stream for each frame.
+As we've seen both of the backups share the same iv and salt (and probably the same passphrase),
+so by xoring each of their frames respectively we can get rid of the encrypted aes stream and get the xored plaintexts.
+Also, If we have the plaintext of one of them we can xor it with the encrypted data and retrieve the aes stream for each frame.
 
-We know that one of the backups is for a new account! So we can create a fresh account and (hopefully) get similar backup.
-I created a new account (using the provided apk) with the name `kirschju`, then created a backup for it.
+We know that one of the backups is for a new account! So we can create a new account and (hopefully) get a similar backup.
+I created a new account (using the provided apk) with the name `kirschju`, then created a backup of it.
 And  saw it is nearly the same size of the empty backup provided:
 
 ```
@@ -90,7 +94,7 @@ And  saw it is nearly the same size of the empty backup provided:
 4118872 signal-2021-11-30-00-18-47.backup
 ```
 
-I modified the python tool `decrypt_frame` function to store each decrypted frame raw data.
+I modified the function `decrypt_frame` in the python tool, to store each decrypted frame raw data.
 
 ```python
 decrypted_frames = [] 				# ADDED
@@ -140,6 +144,12 @@ I wanted to extract the encrypted frames from the encrypted backups.
 Each frame begins with four bytes size, and the encrypted data afterwards.
 After the frame data is decrypted it is parsed (using protobuf) to determine its kind, and if its an avatar/sticker/attachment its content are read from the backup as another frame. The problem is that, the size of the content are determined based on the decrypted "metadata" frame.
 
+Note that the last 10 bytes of each frame are the calculated 
+
+[MAC]: https://en.wikipedia.org/wiki/Message_authentication_code
+
+ (message authentication code) of that frame, which we can ignore.
+
 However, the frame size is usually less than 65536 bytes, so regular frames begins with \x00\x00.
 That way we can extract frames that starts with \x00\x00, and when encountering avatar/sticker/attachment content we can guess its size by searching for the next frame.
 
@@ -147,13 +157,13 @@ That way we can extract frames that starts with \x00\x00, and when encountering 
 def get_frame(data: bytes):
     if data.startswith(b'\x00\x00'):
         size = int.from_bytes(data[:4], 'big') + 4
-        return size, data[4:size]
+        return size, data[4:size-10]
     else:
         size = data.find(b'\x00\x00')
         # making sure its not a random \x00\x00
         while size + 4 + int.from_bytes(data[size:size+4], 'big') != data.find(b'\x00\x00', size+4):
             size = data.find(b'\x00\x00', size+4)
-        return size, data[:size]
+        return size, data[:size-10]
 
 def extract_frames(backup_data: bytes):
     frames = []
@@ -249,14 +259,15 @@ $ binwalk decrypted_chunks
 
 DECIMAL       HEXADECIMAL     DESCRIPTION
 --------------------------------------------------------------------------------
-201575        0x31367         JPEG image data, JFIF standard 1.01
-298277        0x48D25         JPEG image data, JFIF standard 1.01
+198168        0x30618         JPEG image data, JFIF standard 1.01
+294870        0x47FD6         JPEG image data, JFIF standard 1.01
 ```
 
-Extracting all files found `binwalk --dd=".*" decrypted_chunks`.
+Extracting the images using `binwalk --dd=".*" decrypted_chunks`.
 When trying to open both images I receive an error related to the jpeg markers (probably few bytes got broken in the stream).
 
 But the files indeed look like a valid JPEGs, I tried to open them online...
+And saw that the first image contains the flag!
 
 
 
