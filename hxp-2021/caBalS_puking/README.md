@@ -60,11 +60,7 @@ WARNING: Bad MAC in frame: theirMac: (hex:) ff ec 53 c8 58 a9 f6 64 1a 7a
 The backup, cipher and mac keys are derived from the passphrase and the salt.
 
 The data is split into separated frames.
-The encryption seems to be some variation of 
-
-[AES-CTR]: https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Counter_(CTR)
-
- on each frame of the data.
+The encryption seems to be some variation of [AES-CTR](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Counter_(CTR)) on each frame of the data.
 Pseudo code:
 
 ```
@@ -144,11 +140,7 @@ I wanted to extract the encrypted frames from the encrypted backups.
 Each frame begins with four bytes size, and the encrypted data afterwards.
 After the frame data is decrypted it is parsed (using protobuf) to determine its kind, and if its an avatar/sticker/attachment its content are read from the backup as another frame. The problem is that, the size of the content are determined based on the decrypted "metadata" frame.
 
-Note that the last 10 bytes of each frame are the calculated 
-
-[MAC]: https://en.wikipedia.org/wiki/Message_authentication_code
-
- (message authentication code) of that frame, which we can ignore.
+Note that the last 10 bytes of each frame are the calculated [MAC](https://en.wikipedia.org/wiki/Message_authentication_code) (message authentication code) of that frame, which we can ignore.
 
 However, the frame size is usually less than 65536 bytes, so regular frames begins with \x00\x00.
 That way we can extract frames that starts with \x00\x00, and when encountering avatar/sticker/attachment content we can guess its size by searching for the next frame.
